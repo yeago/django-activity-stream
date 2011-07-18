@@ -8,7 +8,6 @@ from django.utils.translation import ugettext_lazy as _
 from django.utils.timesince import timesince as timesince_
 from django.contrib.contenttypes import generic
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.auth.models import User
 
 from actstream.signals import action
 
@@ -19,20 +18,30 @@ class FollowManager(models.Manager):
     def stream_for_user(self, user):
         """
         Produces a QuerySet of most recent activities from actors the user follows
-        """
         follows = self.filter(user=user)
+
         qs = (Action.objects.stream_for_actor(follow.actor) for follow in follows)
         if follows.count():
             return reduce(or_, qs).order_by('-timestamp')
 
-        return Action.objects.none()
+        ....totally gross
+        """
 
+        return Action.objects.filter(pk__in=list(user.actionfollow_set.values_list(\
+            'pk',flat=True))).order_by('-timestamp')
+
+class ActionFollow(models.Model):
+    """
+    This model makes this project actually usable on sites with more than 5 users
+    """
+    user = models.ForeignKey('auth.User')
+    action = models.ForeignKey('Action')
     
 class Follow(models.Model):
     """
     Lets a user follow the activities of any specific actor
     """
-    user = models.ForeignKey(User)
+    user = models.ForeignKey('auth.User')
     
     content_type = models.ForeignKey(ContentType)
     object_id = models.PositiveIntegerField() 
@@ -199,7 +208,19 @@ class Action(models.Model):
     @models.permalink
     def get_absolute_url(self):
         return ('actstream.views.detail', [self.pk])
-        
+
+    def save(self,*args,**kwargs):
+        trigger_actionfollows = False
+        if not self.pk:
+             trigger_actionfollows = True
+
+        super(Action,self).save(*args,**kwargs)
+
+        if trigger_actionfollows:
+            for follow in Follow.objects.filter(content_type=self.target_content_type_id,\
+                object_id=self.target_object_id):
+                ActionFollow.objects.get_or_create(user=follow.user,action=self)
+
 
 def follow(user, actor, send_action=True):
     """
