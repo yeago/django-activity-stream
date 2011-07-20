@@ -24,10 +24,11 @@ def follow_unfollow(request, content_type_id, object_id, do_follow=True):
     """
     ctype = get_object_or_404(ContentType, pk=content_type_id)
     actor = get_object_or_404(ctype.model_class(), pk=object_id)
-        
+     
     if do_follow:
         follow(request.user, actor)
         return respond(request, 201) # CREATED
+
     unfollow(request.user, actor)
     return respond(request, 204) # NO CONTENT
     

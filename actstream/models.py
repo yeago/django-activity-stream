@@ -18,21 +18,18 @@ class FollowManager(models.Manager):
     def stream_for_user(self, user):
         """
         Produces a QuerySet of most recent activities from actors the user follows
-        follows = self.filter(user=user)
 
-        qs = (Action.objects.stream_for_actor(follow.actor) for follow in follows)
-        if follows.count():
-            return reduce(or_, qs).order_by('-timestamp')
-
-        ....totally gross
+        trunk version is totally gross in terms of efficiency.
         """
-
         return Action.objects.filter(pk__in=list(user.actionfollow_set.values_list(\
-            'pk',flat=True))).order_by('-timestamp')
+            'action_id',flat=True))).order_by('-timestamp')
 
 class ActionFollow(models.Model):
     """
     This model makes this project actually usable on sites with more than 5 users
+
+    Also, following isn't neccessarily understood to catch you up or even reveal 
+    historic activity on the target.
     """
     user = models.ForeignKey('auth.User')
     action = models.ForeignKey('Action')
@@ -64,7 +61,6 @@ class ActionManager(models.Manager):
             actor_content_type = ContentType.objects.get_for_model(actor),
             actor_object_id = actor.pk,
         ).order_by('-timestamp')
-        
 
     def stream_for_model(self, model):
         """
@@ -220,7 +216,6 @@ class Action(models.Model):
             for follow in Follow.objects.filter(content_type=self.target_content_type_id,\
                 object_id=self.target_object_id):
                 ActionFollow.objects.get_or_create(user=follow.user,action=self)
-
 
 def follow(user, actor, send_action=True):
     """
